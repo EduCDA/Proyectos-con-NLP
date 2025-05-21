@@ -1,0 +1,235 @@
+# Tutorial: Normalización de Texto y Análisis de Sentimientos
+
+Este tutorial explica paso a paso cómo realizar la normalización de texto y el análisis de sentimientos utilizando Python y bibliotecas populares como pandas, sklearn y más. A continuación, se describen las secciones principales del notebook con explicaciones detalladas de cómo funciona cada parte del código:
+
+## 1. Instalación de Librerías Necesarias
+
+Primero, instalamos las librerías requeridas para el proyecto. Estas librerías incluyen herramientas para la normalización de texto y el modelado:
+```python
+%pip install unidecode
+%pip install chardet
+%pip install ftfy
+```
+- **unidecode**: Elimina acentos y convierte caracteres Unicode a su equivalente ASCII.
+- **chardet**: Detecta la codificación de texto.
+- **ftfy**: Corrige problemas comunes de codificación en texto.
+
+## 2. Importación de Librerías
+
+Importamos las bibliotecas necesarias para el procesamiento de datos, la normalización de texto y el modelado:
+```python
+import pandas as pd
+import re
+import unicodedata
+from unidecode import unidecode
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from ftfy import fix_text
+```
+- **pandas**: Para manipulación de datos.
+- **re**: Para trabajar con expresiones regulares.
+- **unicodedata**: Para normalizar caracteres Unicode.
+- **sklearn**: Para dividir datos, vectorizar texto y entrenar modelos de aprendizaje automático.
+
+## 3. Obtención de Datos
+
+Leemos un archivo CSV con reseñas multilingües y lo cargamos en un DataFrame. Este paso incluye la extracción de columnas específicas y la conversión de datos:
+```python
+ruta_csv = "./resenas_multilingue.csv"
+data = []
+
+with open(ruta_csv, encoding="latin1") as f:
+    next(f)  # Saltar cabecera
+    for line in f:
+        parts = line.strip().rsplit(",", 3)
+        if len(parts) == 4:
+            texto, idioma, rating, categoria = parts
+            data.append({
+                "texto": texto,
+                "idioma": idioma,
+                "rating": int(rating),
+                "categoria": categoria
+            })
+
+df_original = pd.DataFrame(data)
+print("📄 Primeras filas del CSV original (sin transformar):")
+print(df_original.head())
+
+# Copia para aplicar transformaciones
+df = df_original.copy()
+```
+- **`with open`**: Abre el archivo CSV con codificación `latin1`.
+- **`rsplit`**: Divide cada línea en cuatro partes desde el final.
+- **`DataFrame`**: Convierte la lista de diccionarios en un DataFrame para facilitar el análisis.
+
+## 4. Diccionario de Contracciones Coloquiales
+
+Definimos un diccionario para expandir contracciones comunes en el texto. Esto ayuda a estandarizar el lenguaje:
+```python
+dic_contracciones = {
+    "q'huvo": "que hubo",
+    "pq": "porque",
+    " x ": " por ",
+    "dnd": "donde",
+    "tmb": "tambien",
+    "xq": "porque",
+    "k": "que",
+    "q": "que",
+    "pa": "para",
+    "na": "nada",
+    "toi": "estoy",
+    "tamos": "estamos",
+    "ke": "que",
+    "d": "de",
+    "la neta": "la verdad",
+    "no mms": "no manches",
+    "ta": "está",
+    "taba": "estaba",
+    "io": "yo"
+}
+```
+- Este diccionario mapea palabras coloquiales a sus equivalentes formales.
+
+## 5. Funciones de Normalización
+
+Creamos funciones para limpiar y estandarizar el texto. Cada función realiza una tarea específica:
+```python
+def corregir_codificacion(texto):
+    try:
+        texto = texto.encode('latin1').decode('utf-8')
+    except:
+        pass
+    texto = fix_text(texto)
+    return texto
+```
+- **`corregir_codificacion`**: Corrige problemas de codificación en el texto.
+
+```python
+def normalizar_unicode(texto):
+    return unicodedata.normalize('NFC', texto)
+```
+- **`normalizar_unicode`**: Normaliza caracteres Unicode a una forma estándar.
+
+```python
+def filtrar_simbolos(texto):
+    return re.sub(r'[❌▲]', '', texto)
+```
+- **`filtrar_simbolos`**: Elimina símbolos específicos del texto.
+
+```python
+def expandir_contracciones(texto):
+    for contra, exp in dic_contracciones.items():
+        texto = re.sub(rf'\b{re.escape(contra)}\b', exp, texto, flags=re.IGNORECASE)
+    return texto
+```
+- **`expandir_contracciones`**: Reemplaza contracciones coloquiales con sus equivalentes formales.
+
+```python
+def eliminar_acentos(texto):
+    return unidecode(texto)
+```
+- **`eliminar_acentos`**: Elimina acentos y convierte caracteres a ASCII.
+
+```python
+def normalizar_hashtags(texto):
+    hashtags = re.findall(r'#\w+', texto)
+    for h in hashtags:
+        h_norm = '#' + unidecode(h[1:]).lower()
+        texto = texto.replace(h, h_norm)
+    return texto
+```
+- **`normalizar_hashtags`**: Normaliza hashtags convirtiéndolos a minúsculas y eliminando acentos.
+
+```python
+def pipeline_normalizacion(texto):
+    texto = corregir_codificacion(texto)
+    texto = normalizar_unicode(texto)
+    texto = filtrar_simbolos(texto)
+    texto = expandir_contracciones(texto)
+    texto = normalizar_hashtags(texto)
+    texto = eliminar_acentos(texto)
+    texto = texto.lower()
+    texto = re.sub(r'[^\w\s#😞😊❤️]', '', texto)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
+```
+- **`pipeline_normalizacion`**: Aplica todas las funciones anteriores en secuencia para limpiar y estandarizar el texto.
+
+## 6. Aplicación del Pipeline de Normalización
+
+Aplicamos el pipeline de normalización al texto en el DataFrame:
+```python
+df["texto_normalizado"] = df["texto"].apply(pipeline_normalizacion)
+```
+- **`apply`**: Aplica la función de normalización a cada fila de la columna `texto`.
+
+## 7. Mostrar Ejemplos Antes/Después
+
+Mostramos ejemplos de texto antes y después de la normalización para verificar los resultados:
+```python
+print("\n🎯 Ejemplos antes y después de la normalización:")
+for i in range(29):
+    print("\n---")
+    print("Original:", df.loc[i, "texto"])
+    print("Normalizado:", df.loc[i, "texto_normalizado"])
+```
+- **`loc`**: Accede a filas específicas del DataFrame.
+
+## 8. Creación de Etiqueta Binaria de Sentimiento
+
+Creamos una nueva columna para clasificar el sentimiento como positivo o negativo:
+```python
+df_modelo = df[df["rating"] != 3].copy()
+df_modelo["sentimiento"] = df_modelo["rating"].apply(lambda x: 1 if x <= 2 else 0)
+```
+- **`rating != 3`**: Excluye reseñas neutrales.
+- **`lambda`**: Clasifica reseñas con `rating` ≤ 2 como negativas (1) y ≥ 4 como positivas (0).
+
+## 9. Vectorización de Texto
+
+Convertimos el texto en vectores numéricos utilizando `CountVectorizer`:
+```python
+vectorizer = CountVectorizer()
+X_orig = vectorizer.fit_transform(df_modelo["texto"])
+X_norm = vectorizer.fit_transform(df_modelo["texto_normalizado"])
+y = df_modelo["sentimiento"]
+```
+- **`fit_transform`**: Convierte texto en una matriz dispersa de conteos de palabras.
+
+## 10. División de Datos
+
+Dividimos los datos en conjuntos de entrenamiento y prueba:
+```python
+X_train_o, X_test_o, y_train, y_test = train_test_split(X_orig, y, test_size=0.2, random_state=42)
+X_train_n, X_test_n, _, _ = train_test_split(X_norm, y, test_size=0.2, random_state=42)
+```
+- **`train_test_split`**: Divide los datos en proporción 80/20 para entrenamiento y prueba.
+
+## 11. Entrenamiento de Modelos
+
+Entrenamos modelos de regresión logística con los datos vectorizados:
+```python
+modelo_orig = LogisticRegression(max_iter=300)
+modelo_norm = LogisticRegression(max_iter=300)
+modelo_orig.fit(X_train_o, y_train)
+modelo_norm.fit(X_train_n, y_train)
+```
+- **`LogisticRegression`**: Modelo de clasificación supervisada.
+- **`fit`**: Ajusta el modelo a los datos de entrenamiento.
+
+## 12. Evaluación de Modelos
+
+Evaluamos los modelos y comparamos las métricas de rendimiento:
+```python
+acc_orig = accuracy_score(y_test, modelo_orig.predict(X_test_o))
+acc_norm = accuracy_score(y_test, modelo_norm.predict(X_test_n))
+
+print("\n📈 COMPARATIVA DE MÉTRICAS")
+print("⚖️ Tokens únicos sin normalizar:", len(vectorizer.get_feature_names_out()))
+print("⚖️ Accuracy sin normalizar:", round(acc_orig * 100, 2), "%")
+print("⚖️ Accuracy con normalización:", round(acc_norm * 100, 2), "%")
+```
+- **`accuracy_score`**: Calcula la precisión del modelo.
+- **`get_feature_names_out`**: Obtiene las palabras únicas del vocabulario del vectorizador.
